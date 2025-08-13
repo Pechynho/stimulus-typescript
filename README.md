@@ -148,10 +148,9 @@ const portals = ['#modal', '#sidebar'] as const;
 
 When you define portals in your controller, the system:
 
-1. Finds the specified elements in the DOM (using the CSS selectors)
-2. Monitors these elements for targets and actions
-3. Makes these targets available to your controller
-4. Routes actions from these elements to your controller
+1. Monitors these elements for targets and actions
+2. Makes these targets available to your controller
+3. Routes actions from these elements to your controller
 
 This is especially useful for modals, sidebars, or any other elements that might be rendered outside your controller's DOM tree but still need to interact with your controller.
 
