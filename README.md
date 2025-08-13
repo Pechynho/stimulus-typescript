@@ -97,9 +97,9 @@ The `targets` object defines the HTML elements that your controller can target:
 
 ```typescript
 const targets = {
-  form: HTMLFormElement,           // <div data-my-form-target></div>
-  button: HTMLButtonElement,       // <button data-my-button-target></button>
-  input: HTMLInputElement,         // <input data-my-input-target>
+  form: HTMLFormElement, // <div data-my-controller-target="form"></div>
+  button: HTMLButtonElement, // <button data-my-controller-targe="bubton"></button>
+  input: HTMLInputElement, // <input data-my-controller-target="input">
 }
 ```
 
@@ -111,8 +111,8 @@ The `classes` array defines CSS classes that your controller can add/remove:
 const classes = ['selected', 'highlighted', 'active'] as const;
 
 // Usage:
-this.hasSelectedClass             // boolean
-this.selectedClass                // string (class name)
+this.hasSelectedClass // boolean
+this.selectedClass // string (class name)
 ```
 
 #### Outlets
@@ -126,9 +126,9 @@ const outlets = {
 }
 
 // Usage:
-this.hasUserStatusOutlet          // boolean
-this.userStatusOutlet             // UserStatusController
-this.userStatusOutlets            // UserStatusController[]
+this.hasUserStatusOutlet // boolean
+this.userStatusOutlet // UserStatusController
+this.userStatusOutlets // UserStatusController[]
 ```
 
 ### Portals
