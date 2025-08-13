@@ -2,6 +2,13 @@ MIT License
 
 Copyright (c) 2025 Jan Pech
 
+This project is based on:
+- stimulus-typescript (https://github.com/ajaishankar/stimulus-typescript) - Copyright (c) Ajai Shankar
+- headless-components-rails (https://github.com/Tonksthebear/headless-components-rails) - Copyright (c) Tonksthebear
+
+This project includes code from the above-mentioned projects, each licensed under the MIT License.
+Their respective license terms apply to their portions of the code.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

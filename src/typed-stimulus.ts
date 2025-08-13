@@ -241,6 +241,9 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap) {
     }, {} as ValueDefinitionMap);
 }
 
+
+type PreservedStaticMethods<T> = { [K in keyof T]: T[K] };
+
 /**
  * Strongly typed Controller!
  * ```ts
@@ -267,9 +270,6 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap) {
  * }
  * ```
  */
-
-type PreservedStaticMethods<T> = { [K in keyof T]: T[K] };
-
 export function Typed<
     Values extends ValueDefinitionMap = {},
     Targets extends TargetDefinitionMap = {},
