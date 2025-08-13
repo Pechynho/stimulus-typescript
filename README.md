@@ -20,7 +20,7 @@ This package provides strongly typed Stimulus controllers with TypeScript, offer
 
 ```typescript
 import { Controller } from '@hotwired/stimulus';
-import { Typed } from 'stimulus-typescript';
+import { Typed } from '@pechynho/stimulus-typescript';
 
 class MyController extends Typed(
     Controller<HTMLElement>, {
@@ -157,7 +157,7 @@ This is especially useful for modals, sidebars, or any other elements that might
 You need to register special `PortalController` to your Stimulus application:
 ```typescript
 import { Application } from '@hotwired/stimulus';
-import { PortalController } from 'stimulus-typescript';
+import { PortalController } from '@pechynho/stimulus-typescript';
 
 const app = Application.start(...); // Start your Stimulus application
 
@@ -168,7 +168,7 @@ app.register('portal', PortalController);
 
 ```typescript
 import { Controller } from '@hotwired/stimulus';
-import { Typed } from 'stimulus-typescript';
+import { Typed } from '@pechynho/stimulus-typescript';
 
 class ModalController extends Typed(
     Controller<HTMLElement>, {
