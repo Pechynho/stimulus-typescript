@@ -199,7 +199,7 @@ In your HTML:
 
 <!-- This is outside the controller's DOM -->
 <div id="modal" data-controller="portal">
-  <div data-modal-content-target>
+  <div data-modal-target="content">
     Modal content here
     <button data-action="modal#close">Close</button>
   </div>
