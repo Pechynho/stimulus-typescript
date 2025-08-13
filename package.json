@@ -1,0 +1,40 @@
+{
+  "name": "stimulus-typescript",
+  "version": "0.0.1",
+  "description": "Set of TypeScript utilities for Stimulus controllers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "stimulus",
+    "controller",
+    "portal",
+    "typescript"
+  ],
+  "author": "Jan Pech <pechynho@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pechynho/stimulus-portal.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@hotwired/stimulus": "^3.0.0"
+  },
+  "dependencies": {
+    "throttle-debounce": "^5.0.0"
+  },
+  "devDependencies": {
+    "@hotwired/stimulus": "^3.0.0",
+    "@types/throttle-debounce": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}
