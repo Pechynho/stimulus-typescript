@@ -1,10 +1,8 @@
 import {Context, Controller} from "@hotwired/stimulus";
 import Portal from "./portal-controller";
 
-// @ts-ignore
 class Wrapped<T extends object>
 {
-    // @ts-ignore
     private _ = undefined;
 }
 
