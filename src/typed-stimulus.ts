@@ -159,7 +159,7 @@ type PortalProperties = {
     portalSelectorsValueChanged: (value: string[], previousValue: string[]) => void;
 }
 
-export function PortalsAwareController<Base extends Constructor<Controller>>(Base: Base) {
+export function PortalsAwareController<Base extends Constructor<Controller>>(Base: Base): Base {
     return class extends Base
     {
         constructor(...args: any[]) {
@@ -229,7 +229,7 @@ export function PortalsAwareController<Base extends Constructor<Controller>>(Bas
                 }
             }
         }
-    };
+    } as Base;
 }
 
 type StimulusProperties<
@@ -301,10 +301,10 @@ export function Typed<
     };
 
     if (portals === true) {
-        derived = PortalsAwareController(derived);
+        derived = PortalsAwareController(derived as Constructor<Controller>) as typeof derived;
     }
 
-    return derived as unknown as PreservedStaticMethods<typeof Base> & {
+    return derived as typeof Base & PreservedStaticMethods<Base> & {
         new(context: Context): InstanceType<Base> & StimulusProperties<Values, Targets, Outlets, Classes, Portals>;
     };
 }
