@@ -167,8 +167,8 @@ export function PortalsAwareController<Base extends Constructor<Controller>>(Bas
 
             const portalOutlets: Set<Portal> = new Set();
 
-            const originalDisconnect = this.disconnect;
-            this.disconnect = function (): void {
+            const originalDisconnect = (this as any).disconnect;
+            (this as any).disconnect = function (): void {
                 if (portalOutlets.size > 0) {
                     for (const outlet of portalOutlets) {
                         outlet.unsync(this);
