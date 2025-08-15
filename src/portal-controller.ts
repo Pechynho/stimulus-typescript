@@ -43,9 +43,7 @@ export default class extends Controller<HTMLElement>
     private targetsByController: Map<Controller, Set<Element>> = new Map();
     private targetsByIdentifier: Map<string, Set<Element>> = new Map();
     private targetsByTargetName: Map<string, Map<string, Set<Element>>> = new Map();
-    private controllerOriginalMethods: Map<Controller, {
-        [key: string]: TypedPropertyDescriptor<Controller>
-    }> = new Map();
+    private controllerOriginalMethods: Map<Controller, { [key: string]: TypedPropertyDescriptor<Controller> }> = new Map();
     private actionToElementsMap: Map<string, Set<Element>> = new Map();
     private elementToActionsMap: Map<Element, Set<string>> = new Map();
     private identifierToActionElementsMap: Map<string, Set<Element>> = new Map();
