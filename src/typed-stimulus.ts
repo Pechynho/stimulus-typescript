@@ -284,7 +284,7 @@ export function Typed<
 
     if (portals === true) {
         patchedOutlets.push('portal');
-        if (patchedValues['portalSelectors'] === undefined) {
+        if (typeof patchedValues['portalSelectors'] === 'undefined') {
             patchedValues['portalSelectors'] = {
                 type: Array<string>,
                 default: [],
