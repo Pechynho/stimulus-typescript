@@ -35,7 +35,7 @@ class MyController extends Typed(
         },
         classes: ['selected', 'highlighted'] as const,
         outlets: { 'user-status': UserStatusController },
-        portals: ['#portal'] as const
+        portals: true,
     }
 ) {
   // All properties are now strongly typed!
@@ -133,19 +133,6 @@ this.userStatusOutlets // UserStatusController[]
 
 ### Portals
 
-Portals are a powerful feature that allow a Stimulus controller to access actions and targets from DOM elements that are not part of its node list. This is particularly useful when you need to interact with elements that are outside of your controller's DOM hierarchy.
-
-```typescript
-const portals = ['#modal', '#sidebar'] as const;
-
-// This allows your controller to:
-// 1. Target elements inside #modal and #sidebar
-// 2. Listen to actions from elements inside #modal and #sidebar
-// 3. Interact with these elements as if they were part of your controller's DOM
-```
-
-#### How Portals Work
-
 When you define portals in your controller, the system:
 
 1. Monitors these elements for targets and actions
@@ -175,7 +162,7 @@ class ModalController extends Typed(
         targets: {
             content: HTMLDivElement
         },
-        portals: ['#modal'] as const,
+        portals: true,
     }
 ) {
   open() {
@@ -193,12 +180,12 @@ class ModalController extends Typed(
 In your HTML:
 
 ```html
-<div data-controller="modal">
+<div data-controller="modal" data-modal-portal-selectors-value="[#modal]">
   <button data-action="modal#open">Open Modal</button>
 </div>
 
 <!-- This is outside the controller's DOM -->
-<div id="modal" data-controller="portal">
+<div id="modal">
   <div data-modal-target="content">
     Modal content here
     <button data-action="modal#close">Close</button>

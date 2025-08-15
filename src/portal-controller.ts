@@ -4,16 +4,21 @@ import {camelCase, capitalize} from "./utils";
 
 const proxyActionPrefix = '__proxyAction__';
 
-export class Action {
+class Action
+{
     constructor(
         public readonly event: string | undefined,
         public readonly identifier: string,
         public readonly method: string,
-        public readonly modifier: string | undefined
+        public readonly modifier: string | undefined,
+        public stringified: string | null = null,
     ) {
     }
 
     toString(): string {
+        if (this.stringified !== null) {
+            return this.stringified;
+        }
         let directive = '';
         if (this.event !== undefined) {
             directive += `${this.event}->`;
@@ -22,14 +27,15 @@ export class Action {
         if (this.modifier !== undefined) {
             directive += `:${this.modifier}`;
         }
-        return directive;
+        this.stringified = directive;
+        return this.stringified;
     }
 }
 
-export default class PortalController extends Controller<HTMLElement> {
+export default class extends Controller<HTMLElement>
+{
     private observer: MutationObserver | null = null;
     private isConnected: boolean = false;
-    private isSetupProxyActionsRunning: boolean = false;
     private identifiers: Set<string> = new Set();
     private searchedIdentifiersForTargets: Set<string> = new Set();
     private searchedIdentifiersForActions: Set<string> = new Set();
@@ -37,14 +43,17 @@ export default class PortalController extends Controller<HTMLElement> {
     private targetsByController: Map<Controller, Set<Element>> = new Map();
     private targetsByIdentifier: Map<string, Set<Element>> = new Map();
     private targetsByTargetName: Map<string, Map<string, Set<Element>>> = new Map();
-    private controllerOriginalMethods: Map<Controller, { [key: string]: TypedPropertyDescriptor<Controller> }> = new Map();
-    private actionElements: Set<Element> = new Set();
-    private proxyAttachedMethodNames: Set<string> = new Set();
+    private controllerOriginalMethods: Map<Controller, {
+        [key: string]: TypedPropertyDescriptor<Controller>
+    }> = new Map();
+    private actionToElementsMap: Map<string, Set<Element>> = new Map();
+    private elementToActionsMap: Map<Element, Set<string>> = new Map();
+    private identifierToActionElementsMap: Map<string, Set<Element>> = new Map();
+    private actionElementToIdentifiersMap: Map<Element, Set<string>> = new Map();
 
     public initialize(): void {
         this.searchTargets = throttle(1, this.searchTargets.bind(this));
         this.searchActions = throttle(1, this.searchActions.bind(this));
-        this.setupProxyActions = throttle(1, this.setupProxyActions.bind(this));
     }
 
     public connect(): void {
@@ -57,10 +66,9 @@ export default class PortalController extends Controller<HTMLElement> {
 
     public disconnect(): void {
         this.isConnected = false;
-        this.isSetupProxyActionsRunning = false;
         this.disconnectAllTargets();
         this.restoreControllersGetTargetMethods();
-        this.removeProxyActions();
+        this.removeAllProxyActions();
         this.disconnectObserver();
         this.identifiers.clear();
         this.searchedIdentifiersForTargets.clear();
@@ -70,7 +78,10 @@ export default class PortalController extends Controller<HTMLElement> {
         this.targetsByIdentifier.clear();
         this.targetsByTargetName.clear();
         this.controllerOriginalMethods.clear();
-        this.actionElements.clear();
+        this.actionToElementsMap.clear();
+        this.elementToActionsMap.clear();
+        this.identifierToActionElementsMap.clear();
+        this.actionElementToIdentifiersMap.clear();
     }
 
     public sync(controller: Controller): void {
@@ -111,7 +122,7 @@ export default class PortalController extends Controller<HTMLElement> {
             this.searchedIdentifiersForActions.delete(controller.identifier);
             this.targetsByTargetName.delete(controller.identifier);
             if (this.isConnected) {
-                this.setupProxyActions();
+                this.removeAllProxyActionsByIdentifier(controller.identifier);
             }
         }
         this.targetsByController.delete(controller);
@@ -180,7 +191,7 @@ export default class PortalController extends Controller<HTMLElement> {
                     } else if (oldValue !== null && currentValue !== null && oldValue !== currentValue) {
                         this.addActionElement(mutation.target);
                     } else if (oldValue !== null && currentValue === null) {
-                        this.removeActionElement(mutation.target);
+                        this.removeActionElement(mutation.target, true);
                     }
                 } else {
                     for (const identifier of this.identifiers) {
@@ -395,6 +406,10 @@ export default class PortalController extends Controller<HTMLElement> {
         return this.context.schema.actionAttribute;
     }
 
+    private getPortalledActionAttributeName(): string {
+        return this.context.schema.actionAttribute + '-portalled';
+    }
+
     private isObservedTargetElement(element: Element): boolean {
         for (const identifier of this.identifiers) {
             if (element.hasAttribute(this.getTargetAttributeName(identifier))) {
@@ -557,149 +572,213 @@ export default class PortalController extends Controller<HTMLElement> {
     }
 
     private addActionElement(element: Element): void {
-        if (!element.hasAttribute(this.getActionAttributeName())) {
-            return;
-        }
-        this.actionElements.add(element);
-        this.setupProxyActions();
-    }
-
-    private removeActionElement(element: Element): void {
-        if (element.hasAttribute(this.getActionAttributeName())) {
-            return;
-        }
-        this.actionElements.delete(element);
-        this.setupProxyActions();
-    }
-
-    private setupProxyActions(): void {
-        if (!this.isConnected) {
-            return;
-        }
-        if (this.isSetupProxyActionsRunning) {
-            this.setupProxyActions();
-            return;
-        }
-        this.isSetupProxyActionsRunning = true;
-        try {
-            const proxyMethodNames: Set<string> = new Set();
-            const actionAttributeName = this.getActionAttributeName();
-            for (const actionElement of this.actionElements) {
-                if (!actionElement.hasAttribute(actionAttributeName)) {
+        const actionAttributeName = this.getActionAttributeName();
+        const portalledActionAttributeName = this.getPortalledActionAttributeName();
+        const actionsToProxy = [];
+        const actionsToDeleteProxyMethods = [];
+        const newAttributeValueTokens = [];
+        const newPortalledAttributeValueTokens = [];
+        if (!element.hasAttribute(actionAttributeName) && !element.hasAttribute(portalledActionAttributeName)) {
+            const elementToActionsSet = this.elementToActionsMap.get(element);
+            if (elementToActionsSet === undefined || elementToActionsSet.size === 0) {
+                return;
+            }
+            for (const directive of elementToActionsSet) {
+                const actionToElementsSet = this.actionToElementsMap.get(directive);
+                if (actionToElementsSet === undefined || actionToElementsSet.size === 0) {
                     continue;
                 }
-                const actionAttributeValue = actionElement.getAttribute(actionAttributeName)!;
-                const actions = this.parseActions(actionElement);
-                const actionsToProxy = [];
-                const newAttributeValueTokens = [];
-                for (const action of actions) {
-                    newAttributeValueTokens.push(action.toString());
-                    if (this.identifiers.has(action.identifier)) {
-                        actionsToProxy.push(action);
-                    }
-                }
-                for (const action of actionsToProxy) {
-                    const proxyAction = new Action(action.event, this.identifier, this.getProxyActionName(action.method), action.modifier);
-                    proxyMethodNames.add(proxyAction.method);
-                    newAttributeValueTokens.push(proxyAction.toString());
-                }
-                const newAttributeValue = newAttributeValueTokens.join(' ');
-                if (newAttributeValue !== actionAttributeValue) {
-                    newAttributeValue === ''
-                        ? actionElement.removeAttribute(actionAttributeName)
-                        : actionElement.setAttribute(actionAttributeName, newAttributeValue);
+                actionToElementsSet.delete(element);
+                if (actionToElementsSet.size === 0) {
+                    actionsToDeleteProxyMethods.push(this.parseActionToken(directive));
                 }
             }
-            for (const propertyName of this.proxyAttachedMethodNames) {
-                if (typeof (this as any)[propertyName] === 'function' && this.isProxyActionName(propertyName) && !proxyMethodNames.has(propertyName)) {
-                    delete (this as any)[propertyName];
-                    this.proxyAttachedMethodNames.delete(propertyName);
+        }
+        const actions = this.parseActions(element);
+        for (const action of actions) {
+            if (action.identifier === this.identifier) {
+                continue;
+            }
+            const directive = action.toString();
+            let actionToElementsSet = this.actionToElementsMap.get(directive);
+            if (actionToElementsSet === undefined) {
+                actionToElementsSet = new Set<Element>();
+                this.actionToElementsMap.set(directive, actionToElementsSet);
+            }
+            let elementToActionsSet = this.elementToActionsMap.get(element);
+            if (elementToActionsSet === undefined) {
+                elementToActionsSet = new Set<string>();
+                this.elementToActionsMap.set(element, elementToActionsSet);
+            }
+            if (this.identifiers.has(action.identifier)) {
+                actionToElementsSet.add(element);
+                elementToActionsSet.add(directive);
+                actionsToProxy.push(action);
+                newPortalledAttributeValueTokens.push(directive);
+                continue;
+            }
+            newAttributeValueTokens.push(directive);
+            actionToElementsSet.delete(element);
+            elementToActionsSet.delete(directive);
+            if (actionToElementsSet.size === 0) {
+                actionsToDeleteProxyMethods.push(action);
+            }
+        }
+        for (const action of actionsToDeleteProxyMethods) {
+            const proxyActionName = this.getProxyActionName(action.method);
+            if (typeof (this as any)[proxyActionName] === 'function') {
+                delete (this as any)[proxyActionName];
+            }
+        }
+        for (const action of actionsToProxy) {
+            let identifierToActionElementsSet = this.identifierToActionElementsMap.get(action.identifier);
+            if (identifierToActionElementsSet === undefined) {
+                identifierToActionElementsSet = new Set<Element>();
+                this.identifierToActionElementsMap.set(action.identifier, identifierToActionElementsSet);
+            }
+            identifierToActionElementsSet.add(element);
+            let actionElementToIdentifiersSet = this.actionElementToIdentifiersMap.get(element);
+            if (actionElementToIdentifiersSet === undefined) {
+                actionElementToIdentifiersSet = new Set<string>();
+                this.actionElementToIdentifiersMap.set(element, actionElementToIdentifiersSet);
+            }
+            actionElementToIdentifiersSet.add(action.identifier);
+            const proxyAction = this.toProxyAction(action);
+            newAttributeValueTokens.push(proxyAction.toString());
+            if (typeof (this as any)[proxyAction.method] === 'function') {
+                continue;
+            }
+            (this as any)[proxyAction.method] = (event: ActionEvent): void => {
+                const target = event.currentTarget;
+                if (!(target instanceof Element)) {
+                    console.warn(`Proxy action "${proxyAction.method}" called on non-element target`, event);
+                    return;
+                }
+                const targetActions = this.parseActions(target);
+                for (const targetAction of targetActions) {
+                    if (targetAction.identifier === this.identifier || targetAction.method !== action.method) {
+                        continue;
+                    }
+                    const controllers = this.controllers.get(targetAction.identifier);
+                    if (controllers === undefined) {
+                        continue;
+                    }
+                    event.params = this.getActionParams(target, targetAction.identifier);
+                    for (const controller of controllers) {
+                        try {
+                            controller.context.invokeControllerMethod(targetAction.method, event);
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
                 }
             }
-            for (const proxyMethodName of proxyMethodNames) {
-                if (this.proxyAttachedMethodNames.has(proxyMethodName)) {
-                    continue;
-                }
-                const methodName = this.extractActionFromProxyActionName(proxyMethodName);
-                (this as any)[proxyMethodName] = (event: ActionEvent): void => {
-                    const target = event.currentTarget;
-                    if (!(target instanceof Element)) {
-                        console.warn(`Proxy action "${proxyMethodName}" called on non-element target`, event);
-                        return;
-                    }
-                    const actions = this.parseActions(target);
-                    for (const action of actions) {
-                        if (action.identifier === this.identifier || action.method !== methodName) {
-                            continue;
-                        }
-                        const controllers = this.controllers.get(action.identifier);
-                        if (controllers === undefined) {
-                            continue;
-                        }
-                        event.params = this.getActionParams(target, action.identifier);
-                        for (const controller of controllers) {
-                            try {
-                                controller.context.invokeControllerMethod(action.method, event);
-                            } catch (e) {
-                                console.error(e);
-                            }
-                        }
+        }
+        this.setAttributeValue(element, actionAttributeName, newAttributeValueTokens.join(' '));
+        this.setAttributeValue(element, portalledActionAttributeName, newPortalledAttributeValueTokens.join(' '));
+    }
+
+    private removeActionElement(element: Element, forceActionsAttributeRemoval: boolean = false): void {
+        const actionsToDeleteProxyMethods = [];
+        const newAttributeValueTokens = [];
+        const actions = this.parseActions(element);
+        this.elementToActionsMap.delete(element);
+        const actionElementToIdentifiersSet = this.actionElementToIdentifiersMap.get(element);
+        if (actionElementToIdentifiersSet !== undefined) {
+            for (const identifier of actionElementToIdentifiersSet) {
+                const identifierToActionElementsSet = this.identifierToActionElementsMap.get(identifier);
+                if (identifierToActionElementsSet !== undefined) {
+                    identifierToActionElementsSet.delete(element);
+                    if (identifierToActionElementsSet.size === 0) {
+                        this.identifierToActionElementsMap.delete(identifier);
                     }
                 }
-                this.proxyAttachedMethodNames.add(proxyMethodName);
             }
-        } finally {
-            this.isSetupProxyActionsRunning = false;
+            this.actionElementToIdentifiersMap.delete(element);
+        }
+        for (const action of actions) {
+            if (action.identifier === this.identifier) {
+                continue;
+            }
+            const directive = action.toString();
+            if (!forceActionsAttributeRemoval) {
+                newAttributeValueTokens.push(directive);
+            }
+            const actionToElementsSet = this.actionToElementsMap.get(directive);
+            if (actionToElementsSet !== undefined) {
+                actionToElementsSet.delete(element);
+                if (actionToElementsSet.size === 0) {
+                    this.actionToElementsMap.delete(directive);
+                    actionsToDeleteProxyMethods.push(action);
+                }
+            }
+        }
+        for (const action of actionsToDeleteProxyMethods) {
+            const proxyActionName = this.getProxyActionName(action.method);
+            if (typeof (this as any)[proxyActionName] === 'function') {
+                delete (this as any)[proxyActionName];
+            }
+        }
+        this.setAttributeValue(element, this.getActionAttributeName(), newAttributeValueTokens.join(' '));
+        this.setAttributeValue(element, this.getPortalledActionAttributeName(), null);
+    }
+
+    private removeAllProxyActions(): void {
+        for (const identifier of this.identifiers) {
+            this.removeAllProxyActionsByIdentifier(identifier);
         }
     }
 
-    private removeProxyActions(): void {
-        for (const propertyName of this.proxyAttachedMethodNames) {
-            if (typeof (this as any)[propertyName] === 'function' && this.isProxyActionName(propertyName)) {
-                delete (this as any)[propertyName];
-            }
+    private removeAllProxyActionsByIdentifier(identifier: string): void {
+        const elements = this.identifierToActionElementsMap.get(identifier);
+        if (elements === undefined) {
+            return;
         }
-        this.proxyAttachedMethodNames.clear();
+        for (const element of elements) {
+            this.removeActionElement(element);
+        }
+        this.identifierToActionElementsMap.delete(identifier);
     }
 
     private parseActions(element: Element): Action[] {
+        let attributeValue = '';
         const actionAttributeName = this.getActionAttributeName();
-        if (!element.hasAttribute(actionAttributeName)) {
+        const portalledActionAttributeName = this.getPortalledActionAttributeName();
+        if (element.hasAttribute(actionAttributeName)) {
+            attributeValue = (attributeValue + ' ' + element.getAttribute(actionAttributeName)!).trim();
+        }
+        if (element.hasAttribute(portalledActionAttributeName)) {
+            attributeValue = (attributeValue + ' ' + element.getAttribute(portalledActionAttributeName)!).trim();
+        }
+        attributeValue = attributeValue.trim();
+        if (attributeValue === '') {
             return [];
         }
         const actions: Action[] = [];
-        const attributeValue = element.getAttribute(actionAttributeName)!;
         const tokens = attributeValue.split(' ');
-        for (const token of tokens) {
-            if (token.trim() === '') {
+        for (let token of tokens) {
+            token = token.trim();
+            if (token === '') {
                 continue;
             }
-            let [event, rest]: (string | undefined)[] = token.split('->');
-            if (rest === undefined) {
-                rest = event;
-                event = undefined;
-            }
-            const [identifier, methodDetails] = rest.split('#');
-            const [method, modifier] = methodDetails.split(':');
-            if (identifier === this.identifier) {
-                continue;
-            }
-            const action = new Action(event, identifier, method, modifier);
-            actions.push(action);
+            actions.push(this.parseActionToken(token));
         }
         return actions;
     }
 
+    private parseActionToken(token: string): Action {
+        let [event, rest]: (string | undefined)[] = token.split('->');
+        if (rest === undefined) {
+            rest = event;
+            event = undefined;
+        }
+        const [identifier, methodDetails] = rest.split('#');
+        const [method, modifier] = methodDetails.split(':');
+        return new Action(event, identifier, method, modifier, token);
+    }
+
     private getProxyActionName(action: string): string {
         return `${proxyActionPrefix}${action}`;
-    }
-
-    private isProxyActionName(action: string): boolean {
-        return action.startsWith(proxyActionPrefix);
-    }
-
-    private extractActionFromProxyActionName(action: string): string {
-        return action.substring(proxyActionPrefix.length);
     }
 
     private getActionParams(element: Element, identifier: string): { [_key: string]: any } {
@@ -720,5 +799,25 @@ export default class PortalController extends Controller<HTMLElement> {
             params[camelCase(match[1])] = parseParam(value);
         }
         return params
+    }
+
+    private toProxyAction(action: Action): Action {
+        return new Action(
+            action.event,
+            this.identifier,
+            this.getProxyActionName(action.method),
+            action.modifier,
+        );
+    }
+
+    private setAttributeValue(element: Element, attributeName: string, value: string | null): void {
+        value = value === null ? '' : value.trim();
+        if (value === '' && element.hasAttribute(attributeName)) {
+            element.removeAttribute(attributeName);
+        } else if (value !== '' && !element.hasAttribute(attributeName)) {
+            element.setAttribute(attributeName, value);
+        } else if (value !== '' && element.getAttribute(attributeName) !== value) {
+            element.setAttribute(attributeName, value);
+        }
     }
 }

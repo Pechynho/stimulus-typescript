@@ -1,5 +1,5 @@
 import {Context, Controller} from "@hotwired/stimulus";
-import PortalController from "./portal-controller";
+import Portal from "./portal-controller";
 
 // @ts-ignore
 class Wrapped<T extends object>
@@ -129,7 +129,7 @@ type Statics<
     Targets extends TargetDefinitionMap,
     Outlets extends OutletDefinitionMap,
     Classes extends readonly string[],
-    Portals extends readonly string[],
+    Portals extends boolean,
 > = {
     values?: Values;
     targets?: Targets;
@@ -148,33 +148,27 @@ type ClassProperties<C extends readonly string[]> = Simplify<
 }
 >;
 
-type PortalOutletProperties = {
-    portalOutlet: PortalController;
+type PortalProperties = {
+    portalOutlet: Portal;
     hasPortalOutlet: boolean;
-    portalOutlets: PortalController[];
-    portalOutletConnected: (outlet: PortalController, element: HTMLElement) => void;
-    portalOutletDisconnected: (outlet: PortalController, element: HTMLElement) => void;
+    portalOutlets: Portal[];
+    portalOutletConnected: (outlet: Portal, element: HTMLElement) => void;
+    portalOutletDisconnected: (outlet: Portal, element: HTMLElement) => void;
+    portalSelectorsValue: string[];
+    hasPortalSelectorsValue: boolean;
+    portalSelectorsValueChanged: (value: string[], previousValue: string[]) => void;
 }
 
-function withPortals<BaseClass extends Constructor<Controller>>(Base: BaseClass, portals: readonly string[]) {
+export function PortalsAwareController<Base extends Constructor<Controller>>(Base: Base) {
     return class extends Base
     {
         constructor(...args: any[]) {
             super(...args);
 
-            const portalOutlets: Set<PortalController> = new Set();
-
-            const originalConnect = this.connect;
-            this.connect = function (): void {
-                this.element.setAttribute(`data-${this.identifier}-portal-outlet`, portals.join(', '));
-                if (typeof originalConnect === "function") {
-                    originalConnect.call(this);
-                }
-            };
+            const portalOutlets: Set<Portal> = new Set();
 
             const originalDisconnect = this.disconnect;
             this.disconnect = function (): void {
-                this.element.removeAttribute(`data-${this.identifier}-portal-outlet`);
                 if (portalOutlets.size > 0) {
                     for (const outlet of portalOutlets) {
                         outlet.unsync(this);
@@ -187,7 +181,7 @@ function withPortals<BaseClass extends Constructor<Controller>>(Base: BaseClass,
             };
 
             const originalPortalOutletConnected = (this as any).portalOutletConnected;
-            (this as any).portalOutletConnected = function (outlet: PortalController, element: HTMLElement): void {
+            (this as any).portalOutletConnected = function (outlet: Portal, element: HTMLElement): void {
                 outlet.sync(this);
                 portalOutlets.add(outlet);
                 if (typeof originalPortalOutletConnected === 'function') {
@@ -196,13 +190,44 @@ function withPortals<BaseClass extends Constructor<Controller>>(Base: BaseClass,
             };
 
             const originalPortalOutletDisconnected = (this as any).portalOutletDisconnected;
-            (this as any).portalOutletDisconnected = function (outlet: PortalController, element: HTMLElement): void {
+            (this as any).portalOutletDisconnected = function (outlet: Portal, element: HTMLElement): void {
                 outlet.unsync(this);
                 portalOutlets.delete(outlet);
                 if (typeof originalPortalOutletDisconnected === 'function') {
                     originalPortalOutletDisconnected.call(this, outlet, element);
                 }
             };
+
+            const originalPortalSelectorsValueChanged = (this as any).portalSelectorsValueChanged;
+            (this as any).portalSelectorsValueChanged = function (value: string[], previousValue: string[]): void {
+                const outletAttribute = `data-${this.identifier}-portal-outlet`;
+                if (value.length > 0) {
+                    const controllerAttribute = this.context.schema.controllerAttribute;
+                    const selector = value.join(', ');
+                    const portalElements = document.querySelectorAll(selector);
+                    for (const portalElement of portalElements) {
+                        if (!portalElement.hasAttribute(controllerAttribute)) {
+                            portalElement.setAttribute(controllerAttribute, 'portal');
+                            continue;
+                        }
+                        const existingControllers = portalElement.getAttribute(controllerAttribute)!.split(' ');
+                        if (!existingControllers.includes('portal')) {
+                            existingControllers.push('portal');
+                            portalElement.setAttribute(controllerAttribute, existingControllers.join(' '));
+                        }
+                    }
+                    if (!this.element.hasAttribute(outletAttribute)) {
+                        this.element.setAttribute(outletAttribute, selector);
+                    } else if (this.element.getAttribute(outletAttribute) !== selector) {
+                        this.element.setAttribute(outletAttribute, selector);
+                    }
+                } else if (this.element.hasAttribute(outletAttribute)) {
+                    this.element.removeAttribute(outletAttribute);
+                }
+                if (typeof originalPortalSelectorsValueChanged === 'function') {
+                    originalPortalSelectorsValueChanged.call(this, value, previousValue);
+                }
+            }
         }
     };
 }
@@ -212,13 +237,13 @@ type StimulusProperties<
     Targets extends TargetDefinitionMap,
     Outlets extends OutletDefinitionMap,
     Classes extends readonly string[],
-    Portals extends readonly string[],
+    Portals extends boolean,
 > = Simplify<
     MagicProperties<TransformValueDefinition<Values>, "Value"> &
     MagicProperties<TransformType<Targets>, "Target"> &
     MagicProperties<TransformType<Outlets>, "Outlet"> &
     ClassProperties<Classes> &
-    (Portals['length'] extends 0 ? {} : PortalOutletProperties)
+    (Portals extends true ? PortalProperties : {})
 >;
 
 /**
@@ -241,61 +266,42 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap) {
     }, {} as ValueDefinitionMap);
 }
 
-
 type PreservedStaticMethods<T> = { [K in keyof T]: T[K] };
 
-/**
- * Strongly typed Controller!
- * ```ts
- * const values = {
- *  name: String,
- *  alias: Array<string>,
- *  address: Object_<{ street: string }>
- * }
- * const targets = { form: HTMLFormElement, "select": Target<CustomSelect> }
- * const classes = ['selected', 'highlighted'] as const;
- * const outlets = { "user-status": UserStatusController }
- * const portals = ['#portal'] as const;
- *
- * class MyController extends Typed(Controller, { values, targets, classes, outlets, portals }) {
- *  // Look Ma, no "declare ..."
- *  this.nameValue.split(' ')
- *  this.aliasValue.map(alias => alias.toUpperCase())
- *  this.addressValue.street
- *  this.formTarget.submit()
- *  this.selectTarget.search = "stimulus";
- *  this.userStatusOutlets.forEach(status => status.markAsSelected(event))
- *  this.hasSelectedClass
- *  this.selectedClass
- * }
- * ```
- */
 export function Typed<
     Values extends ValueDefinitionMap = {},
     Targets extends TargetDefinitionMap = {},
     Outlets extends OutletDefinitionMap = {},
     Classes extends readonly string[] = [],
-    Portals extends readonly string[] = [],
+    Portals extends boolean = false,
     Base extends Constructor<Controller> = Constructor<Controller>,
 >(Base: Base, statics: Statics<Values, Targets, Outlets, Classes, Portals> = {}) {
     const {values, targets, classes, outlets, portals} = statics;
 
     const patchedOutlets = Object.getOwnPropertyNames(outlets ?? {});
 
-    if (Array.isArray(portals) && portals.length > 0) {
+    const patchedValues: ValueDefinitionMap = values ?? {};
+
+    if (portals === true) {
         patchedOutlets.push('portal');
+        if (patchedValues['portalSelectors'] === undefined) {
+            patchedValues['portalSelectors'] = {
+                type: Array<string>,
+                default: [],
+            };
+        }
     }
 
     let derived = class extends Base
     {
-        static values = patchValueTypeDefinitionMap(values ?? {});
+        static values = patchValueTypeDefinitionMap(patchedValues);
         static targets = Object.getOwnPropertyNames(targets ?? {});
         static outlets = patchedOutlets;
         static classes = classes ?? [];
     };
 
-    if (Array.isArray(portals) && portals.length > 0) {
-        derived = withPortals(derived, portals);
+    if (portals === true) {
+        derived = PortalsAwareController(derived);
     }
 
     return derived as unknown as PreservedStaticMethods<typeof Base> & {
