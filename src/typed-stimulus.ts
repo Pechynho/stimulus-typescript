@@ -266,8 +266,6 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap) {
     }, {} as ValueDefinitionMap);
 }
 
-type PreservedStaticMethods<T> = { [K in keyof T]: T[K] };
-
 export function Typed<
     Values extends ValueDefinitionMap = {},
     Targets extends TargetDefinitionMap = {},
@@ -304,7 +302,7 @@ export function Typed<
         derived = PortalsAwareController(derived as Constructor<Controller>) as typeof derived;
     }
 
-    return derived as typeof Base & PreservedStaticMethods<Base> & {
+    return derived as typeof Base & {
         new(context: Context): InstanceType<Base> & StimulusProperties<Values, Targets, Outlets, Classes, Portals>;
     };
 }
