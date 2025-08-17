@@ -1,4 +1,4 @@
-import {Context, Controller} from "@hotwired/stimulus";
+import {Controller} from "@hotwired/stimulus";
 import Portal from "./portal-controller";
 
 class Wrapped<T = any>
@@ -19,10 +19,6 @@ export const Target = <T extends object>() => new Wrapped<T>('target');
 
 type Constructor<T = {}> = new (...args: any[]) => T;
 
-type ControllerConstructor<T extends Element> = new (context: Context) => Controller<T>;
-
-type ControllerElementType<C> = C extends Controller<infer E> ? E : never;
-
 type CamelCase<K extends string> =
     K extends `${infer T}_${infer U}`
         ? `${Uncapitalize<T>}${Capitalize<CamelCase<U>>}`
@@ -37,22 +33,22 @@ type ClassProperties<Classes extends readonly string[] = []> =
     { readonly [K in Classes[number] as `has${Capitalize<CamelCase<K>>}Class`]: boolean } &
     { [K in Classes[number] as `${CamelCase<K>}Classes`]: string[] };
 
-type ValueTypeDefault = Array<any> | boolean | number | Object | typeof Wrapped | string;
+type ValueTypeDefault = string | number | boolean | Array<any> | Object | InstanceType<typeof Wrapped>;
 
 type ValueTypeConstant =
-    | typeof Array<any>
-    | typeof Boolean
-    | typeof Number
-    | typeof TypedObject
     | typeof String
-    | typeof Wrapped;
+    | typeof Number
+    | typeof Boolean
+    | typeof Array<any>
+    | typeof Object
+    | InstanceType<typeof Wrapped>
 
 type ValueTypeObject = {
     type: ValueTypeConstant;
     default?: ValueTypeDefault;
 };
 
-type ValueTypeDefinition = ValueTypeConstant | ValueTypeObject | InstanceType<Wrapped>;
+type ValueTypeDefinition = ValueTypeConstant | ValueTypeObject | InstanceType<typeof Wrapped>;
 
 type ValueDefinitionMap = {
     [token: string]: ValueTypeDefinition;
@@ -84,7 +80,7 @@ type ValuesProperties<Values extends ValueDefinitionMap> =
     { [K in keyof Values as `${CamelCase<K & string>}Value`]: TransformValueDefinition<Values[K]> } &
     { readonly [K in keyof Values as `has${Capitalize<CamelCase<K & string>>}Value`]: boolean };
 
-type TargetTypeDefinition = typeof Element | InstanceType<Wrapped>;
+type TargetTypeDefinition = typeof Element | InstanceType<typeof Wrapped>;
 
 type TargetsDefinitionMap = {
     [token: string]: TargetTypeDefinition;
@@ -93,7 +89,9 @@ type TargetsDefinitionMap = {
 type TransformTargetDefinition<T extends TargetTypeDefinition> =
     T extends Wrapped<infer U>
         ? U
-        : InstanceType<T>;
+        : T extends new (...args: any[]) => infer R
+            ? R
+            : never;
 
 type TargetsProperties<Targets extends TargetsDefinitionMap> =
     { readonly [K in keyof Targets as `${CamelCase<K & string>}Target`]: TransformTargetDefinition<Targets[K]> } &
@@ -120,11 +118,11 @@ type PortalProperties<Portals extends true | undefined> =
         }
         : {};
 
-function PortalsMixin<Base extends ControllerConstructor<ControllerElementType<Controller>> = ControllerConstructor<ControllerElementType<Controller>>>(Base: Base): Base {
+function PortalsMixin<Base extends Constructor<Controller>>(Base: Base): Base {
     return class extends Base
     {
-        constructor(context: Context) {
-            super(context);
+        constructor(...any: any[]) {
+            super(...any);
 
             const portalOutlets: Set<Portal> = new Set();
 
@@ -209,7 +207,7 @@ type Configuration<
 
 function patchValueTypeDefinitionMap(values: ValueDefinitionMap): ValueDefinitionMap {
     const patchedValues: ValueDefinitionMap = {};
-    const pathType = (type: any) => {
+    const patchType = (type: any) => {
         if (type instanceof Wrapped && type.context === 'typed-object') {
             return Object;
         }
@@ -222,13 +220,13 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap): ValueDefinitio
         const definition = values[key];
         if (typeof definition === 'object' && 'default' in definition && 'type' in definition) {
             patchedValues[key] = {
-                type: pathType(definition.type),
+                type: patchType(definition.type),
                 default: definition.default,
             };
         } else if (typeof definition === 'object' && 'type' in definition) {
-            patchedValues[key] = pathType(definition.type);
+            patchedValues[key] = patchType(definition.type);
         } else if (definition instanceof Wrapped) {
-            patchedValues[key] = pathType(definition);
+            patchedValues[key] = patchType(definition);
         } else {
             patchedValues[key] = definition;
         }
@@ -237,14 +235,14 @@ function patchValueTypeDefinitionMap(values: ValueDefinitionMap): ValueDefinitio
 }
 
 export function Typed<
+    Base extends Constructor<Controller>,
     Values extends ValueDefinitionMap = {},
     Targets extends TargetsDefinitionMap = {},
     Classes extends readonly string[] = [],
     Outlets extends OutletsDefinitionMap = {},
     Portals extends true | undefined = undefined,
-    Base extends ControllerConstructor<ControllerElementType<Controller>> = ControllerConstructor<ControllerElementType<Controller>>,
->(Base: Base, configuration: Configuration<Values, Targets, Classes, Outlets, Portals> = {}) {
-    const {values, targets, classes, outlets, portals} = configuration;
+>(Base: Base, configuration?: Configuration<Values, Targets, Classes, Outlets, Portals>) {
+    const {values, targets, classes, outlets, portals} = configuration ?? {};
 
     const patchedOutlet = Object.getOwnPropertyNames(outlets ?? {});
 
@@ -253,12 +251,16 @@ export function Typed<
     if (portals === true) {
         patchedOutlet.push('portal');
         if (typeof patchedValues['portalSelectors'] === 'undefined') {
-            patchedValues['portalSelectors'] = {type: TypedArray<string>, default: []};
+            patchedValues['portalSelectors'] = {type: TypedArray<string>(), default: []};
         }
     }
 
     let derived = class extends Base
     {
+        constructor(...any: any[]) {
+            super(...any);
+        }
+
         static values = patchedValues;
         static targets = Object.getOwnPropertyNames(targets ?? {});
         static classes = classes ?? [];
@@ -269,8 +271,8 @@ export function Typed<
         derived = PortalsMixin(derived as Base) as typeof derived;
     }
 
-    return derived as typeof Base & {
-        new(context: Context): InstanceType<Base>
+    return derived as unknown as typeof Base & {
+        new(...any: any[]): InstanceType<Base>
             & ValuesProperties<Values>
             & TargetsProperties<Targets>
             & ClassProperties<Classes>

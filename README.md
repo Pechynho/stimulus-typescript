@@ -63,7 +63,7 @@ class HomepageController extends Typed(
 
         // Targets
         this.formTarget.submit();
-        this.selectTarget.search = 'stimulus';
+        this.selectTarget.value = 'stimulus';
         this.customTarget.someCustomMethod();
 
         // Outlets
