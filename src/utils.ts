@@ -22,14 +22,14 @@ export const getControllerAsync = async <T extends Controller>(app: Application,
     const startTime = Date.now();
     const maxAttempts = 10;
     let attempts = 0;
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const checkController = () => {
             attempts++;
             const controller = app.getControllerForElementAndIdentifier(element, identifier) as T | null;
             if (controller !== null) {
                 resolve(controller);
             } else if (Date.now() - startTime >= timeout) {
-                reject(`Controller ${identifier} not found`);
+                resolve(null);
             } else if (attempts <= maxAttempts) {
                 setTimeout(checkController);
             } else {

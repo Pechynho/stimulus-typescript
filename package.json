@@ -1,6 +1,6 @@
 {
   "name": "@pechynho/stimulus-typescript",
-  "version": "0.0.4",
+  "version": "0.0.8",
   "description": "Set of TypeScript utilities for Stimulus controllers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pechynho/stimulus-typescript.git"
+    "url": "git+https://github.com/pechynho/stimulus-typescript.git"
   },
   "files": [
     "dist",

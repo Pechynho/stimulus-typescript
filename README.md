@@ -5,7 +5,7 @@ This project is based on the following projects:
 - [stimulus-typescript](https://github.com/ajaishankar/stimulus-typescript/tree/main) by Ajai Shankar
 - [headless-components-rails](https://github.com/Tonksthebear/headless-components-rails) by Tonksthebear
 
-We would like to thank the authors of these projects for their work, which served as the foundation for this package.
+I would like to thank the authors of these projects for their work, which served as the foundation for this package.
 
 ## MIT Licenses of Original Projects
 
@@ -167,7 +167,7 @@ You need to register special `PortalController` to your Stimulus application:
 import { Application } from '@hotwired/stimulus';
 import { PortalController } from '@pechynho/stimulus-typescript';
 
-const app = Application.start(...); // Start your Stimulus application
+const app = Application.start(); // Start your Stimulus application
 
 app.register('portal', PortalController); // Register PortalController
 ```
@@ -176,14 +176,13 @@ app.register('portal', PortalController); // Register PortalController
 
 ```typescript
 import { Controller } from '@hotwired/stimulus';
-import { Typed } from '@pechynho/stimulus-typescript';
+import { Typed, Portals } from '@pechynho/stimulus-typescript';
 
 class ModalController extends Typed(
-    Controller<HTMLElement>, {
+    Portals(Controller<HTMLElement>), {
         targets: {
             content: HTMLDivElement
         },
-        portals: true,
     }
 ) {
   public open(): void {
@@ -215,3 +214,62 @@ In your HTML:
 ```
 
 With portals, the ModalController can interact with elements inside #modal even though they're outside its DOM hierarchy.
+
+### Resolvable
+
+When you use the Resolvable feature, your controller class gains two static methods:
+
+1. `get<T>`: Synchronously gets a controller instance for a specific element
+2. `getAsync<T>`: Asynchronously gets a controller instance with timeout and polling options
+
+#### Example
+
+```typescript
+import { Controller } from '@hotwired/stimulus';
+import { Typed, Resolvable } from '@pechynho/stimulus-typescript';
+
+class UserController extends Typed(
+    Resolvable(Controller<HTMLElement>, 'user'), {
+        values: {
+            name: String,
+        },
+    }
+) {
+    public greet(): void {
+        console.log(`Hello, ${this.nameValue}!`);
+    }
+}
+
+// Later, in another part of your code:
+const userElement = document.querySelector('#user');
+
+// Synchronous access (returns null if controller is not found)
+const userController = UserController.get(userElement);
+if (userController) {
+    userController.greet();
+}
+
+// Asynchronous access (resolves when controller is found or rejects after timeout)
+UserController.getAsync(userElement)
+    .then(controller => {
+        if (controller !== null) {
+            controller.greet();
+        }
+    })
+    .catch(error => console.error(error));
+
+// With custom timeout and polling interval (in milliseconds)
+UserController.getAsync(userElement, 10000, 100)
+    .then(controller => {
+        if (controller !== nu) {
+            controller.greet();
+        }
+    })
+    .catch(error => console.error(error));
+```
+
+This is particularly useful when:
+- Working with dynamically loaded content
+- Integrating with non-Stimulus JavaScript libraries
+- Communicating between controllers that don't have a parent-child relationship
+- You've just added an element to the DOM and want it to resolve to a controller, so you use `getAsync` and you do not have to deal with Stimulus internal timing (has Stimulus already discovered a new element and connected controller?)
