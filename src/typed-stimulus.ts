@@ -1,167 +1,130 @@
 import {Context, Controller} from "@hotwired/stimulus";
 import Portal from "./portal-controller";
 
-class Wrapped<T extends object>
+class Wrapped<T = any>
 {
-    private _ = undefined;
+    private _: T | undefined = undefined;
+
+    public constructor(
+        public readonly context: 'typed-object' | 'typed-array' | 'target',
+    ) {
+    }
 }
 
-/**
- * Strongly type Object values
- * ```ts
- * const values = {
- *  address: Object_<{ street: string }>
- * }
- * ```
- */
-export const Object_ = Wrapped;
-export const ObjectAs = Object_;
-/**
- * Strongly type custom targets
- * ```ts
- * const targets = {
- *  select: Target<CustomSelect>
- * }
- * ```
- */
-export const Target = Wrapped;
+export const TypedObject = <T extends object>() => new Wrapped<T>('typed-object');
 
-/**
- * Identifier to camel case (admin--user-status to adminUserStatus)
- */
-type CamelCase<K extends string> = K extends `${infer Head}-${infer Tail}`
-    ? `${Head}${Capitalize<CamelCase<Tail>>}`
-    : K;
+export const TypedArray = <T>() => new Wrapped<T[]>('typed-array');
 
-type ElementType<C> = C extends Controller<infer E> ? E : never;
-
-type Singular<T, Suffix extends string> = {
-    [K in keyof T as `${CamelCase<K & string>}${Suffix}`]: T[K];
-};
-
-type Existential<T, Suffix extends string> = {
-    [K in keyof T as `has${Capitalize<CamelCase<K & string>>}${Suffix}`]: boolean;
-};
-
-type Plural<T, Suffix extends string> = {
-    [K in keyof T as `${CamelCase<K & string>}${Suffix}s`]: T[K][];
-};
-
-type Elemental<T, Suffix extends string> = {
-    [K in keyof T as `${CamelCase<K & string>}${Suffix}Element`]: ElementType<T[K]>;
-} & {
-    [K in keyof T as `${CamelCase<K & string>}${Suffix}Elements`]: ElementType<T[K]>[];
-};
-
-type Simplify<T> = { [KeyType in keyof T]: T[KeyType] } & {};
-
-type MagicProperties<T, Kind extends string> = (Kind extends "Value"
-    ? Singular<T, Kind>
-    : Readonly<Singular<T, Kind>>) &
-    Readonly<Existential<T, Kind>> &
-    Readonly<Kind extends "Target" | "Outlet" ? Plural<T, Kind> : unknown> &
-    Readonly<Kind extends "Outlet" ? Elemental<T, Kind> : unknown>;
+export const Target = <T extends object>() => new Wrapped<T>('target');
 
 type Constructor<T = {}> = new (...args: any[]) => T;
 
-type TypeFromConstructor<C> = C extends StringConstructor
-    ? string
-    : C extends NumberConstructor
-        ? number
-        : C extends BooleanConstructor
-            ? boolean
-            : C extends Constructor<infer T>
-                ? T extends Wrapped<infer O>
-                    ? O
-                    : Object extends T
-                        ? unknown
-                        : T
-                : never;
+type ControllerConstructor<T extends Element> = new (context: Context) => Controller<T>;
 
-/**
- * Map `{ [key:string]: Constructor<T> } to { [key:string]: T }`
- */
-type TransformType<T extends {}> = {
-    [K in keyof T]: TypeFromConstructor<T[K]>;
-};
+type ControllerElementType<C> = C extends Controller<infer E> ? E : never;
 
-/**
- * Transform `{ [key:string]: ValueTypeConstant | ValueTypeObject }`
- */
-type TransformValueDefinition<T extends {}> = TransformType<{
-    [K in keyof T]: T[K] extends { type: infer U } ? U : T[K];
-}>;
+type CamelCase<K extends string> =
+    K extends `${infer T}_${infer U}`
+        ? `${Uncapitalize<T>}${Capitalize<CamelCase<U>>}`
+        : K extends `${infer T}-${infer U}`
+            ? `${Uncapitalize<T>}${Capitalize<CamelCase<U>>}`
+            : K extends `${infer T} ${infer U}`
+                ? `${Uncapitalize<T>}${Capitalize<CamelCase<U>>}`
+                : K;
 
-// tweak stimulus value definition map to support typed array and object
-type ValueDefinitionMap = {
-    [token: string]: ValueTypeDefinition;
-};
+type ClassProperties<Classes extends readonly string[] = []> =
+    { [K in Classes[number] as `${CamelCase<K>}Class`]: string } &
+    { readonly [K in Classes[number] as `has${Capitalize<CamelCase<K>>}Class`]: boolean } &
+    { [K in Classes[number] as `${CamelCase<K>}Classes`]: string[] };
+
+type ValueTypeDefault = Array<any> | boolean | number | Object | typeof Wrapped | string;
 
 type ValueTypeConstant =
     | typeof Array<any>
     | typeof Boolean
     | typeof Number
-    | typeof Object
+    | typeof TypedObject
     | typeof String
-    | typeof Object_;
+    | typeof Wrapped;
 
-type ValueTypeDefault = Array<any> | boolean | number | Object | typeof Object_ | string;
-
-type ValueTypeObject = Partial<{
+type ValueTypeObject = {
     type: ValueTypeConstant;
-    default: ValueTypeDefault;
-}>;
-
-type ValueTypeDefinition = ValueTypeConstant | ValueTypeObject;
-
-type TargetDefinitionMap = {
-    [token: string]: typeof Element | typeof Target;
+    default?: ValueTypeDefault;
 };
 
-type OutletDefinitionMap = {
+type ValueTypeDefinition = ValueTypeConstant | ValueTypeObject | InstanceType<Wrapped>;
+
+type ValueDefinitionMap = {
+    [token: string]: ValueTypeDefinition;
+};
+
+type TypeFromConstructor<C> =
+    C extends StringConstructor
+        ? string
+        : C extends NumberConstructor
+            ? number
+            : C extends BooleanConstructor
+                ? boolean
+                : C extends ArrayConstructor
+                    ? any[]
+                    : C extends Wrapped<infer T>
+                        ? T
+                        : C extends ObjectConstructor
+                            ? Object
+                            : C extends Constructor<infer T>
+                                ? TypeFromConstructor<T>
+                                : never;
+
+type TransformValueDefinition<T extends ValueTypeDefinition> =
+    T extends { type: infer U }
+        ? TypeFromConstructor<U>
+        : TypeFromConstructor<T>;
+
+type ValuesProperties<Values extends ValueDefinitionMap> =
+    { [K in keyof Values as `${CamelCase<K & string>}Value`]: TransformValueDefinition<Values[K]> } &
+    { readonly [K in keyof Values as `has${Capitalize<CamelCase<K & string>>}Value`]: boolean };
+
+type TargetTypeDefinition = typeof Element | InstanceType<Wrapped>;
+
+type TargetsDefinitionMap = {
+    [token: string]: TargetTypeDefinition;
+};
+
+type TransformTargetDefinition<T extends TargetTypeDefinition> =
+    T extends Wrapped<infer U>
+        ? U
+        : InstanceType<T>;
+
+type TargetsProperties<Targets extends TargetsDefinitionMap> =
+    { readonly [K in keyof Targets as `${CamelCase<K & string>}Target`]: TransformTargetDefinition<Targets[K]> } &
+    { readonly [K in keyof Targets as `has${Capitalize<CamelCase<K & string>>}Target`]: boolean } &
+    { readonly [K in keyof Targets as `${CamelCase<K & string>}Targets`]: TransformTargetDefinition<Targets[K]>[] };
+
+type OutletsDefinitionMap = {
     [token: string]: Constructor<Controller>;
 };
 
-type Statics<
-    Values extends ValueDefinitionMap,
-    Targets extends TargetDefinitionMap,
-    Outlets extends OutletDefinitionMap,
-    Classes extends readonly string[],
-    Portals extends boolean,
-> = {
-    values?: Values;
-    targets?: Targets;
-    outlets?: Outlets;
-    classes?: Classes;
-    portals?: Portals;
-};
+type OutletProperties<Outlets extends OutletsDefinitionMap> =
+    { readonly [K in keyof Outlets as `${CamelCase<K & string>}Outlet`]: InstanceType<Outlets[K]> } &
+    { readonly [K in keyof Outlets as `has${Capitalize<CamelCase<K & string>>}Outlet`]: boolean } &
+    { readonly [K in keyof Outlets as `${CamelCase<K & string>}Outlets`]: InstanceType<Outlets[K]>[] };
 
-type ClassProperties<C extends readonly string[]> = Simplify<
-    {
-        [K in C[number] as `${CamelCase<K>}Class`]: string;
-    } & {
-    [K in C[number] as `has${Capitalize<CamelCase<K>>}Class`]: boolean;
-} & {
-    [K in C[number] as `${CamelCase<K>}Classes`]: string[];
-}
->;
+type PortalProperties<Portals extends true | undefined> =
+    Portals extends boolean
+        ? {
+            readonly portalOutlet: Portal;
+            readonly hasPortalOutlet: boolean;
+            readonly portalOutlets: Portal[];
+            portalSelectorsValue: string[];
+            readonly hasPortalSelectorsValue: boolean;
+        }
+        : {};
 
-type PortalProperties = {
-    portalOutlet: Portal;
-    hasPortalOutlet: boolean;
-    portalOutlets: Portal[];
-    portalOutletConnected: (outlet: Portal, element: HTMLElement) => void;
-    portalOutletDisconnected: (outlet: Portal, element: HTMLElement) => void;
-    portalSelectorsValue: string[];
-    hasPortalSelectorsValue: boolean;
-    portalSelectorsValueChanged: (value: string[], previousValue: string[]) => void;
-}
-
-export function PortalsAwareController<Base extends Constructor<Controller>>(Base: Base): Base {
+function PortalsMixin<Base extends ControllerConstructor<ControllerElementType<Controller>> = ControllerConstructor<ControllerElementType<Controller>>>(Base: Base): Base {
     return class extends Base
     {
-        constructor(...args: any[]) {
-            super(...args);
+        constructor(context: Context) {
+            super(context);
 
             const portalOutlets: Set<Portal> = new Set();
 
@@ -230,77 +193,88 @@ export function PortalsAwareController<Base extends Constructor<Controller>>(Bas
     } as Base;
 }
 
-type StimulusProperties<
+type Configuration<
     Values extends ValueDefinitionMap,
-    Targets extends TargetDefinitionMap,
-    Outlets extends OutletDefinitionMap,
+    Targets extends TargetsDefinitionMap,
     Classes extends readonly string[],
-    Portals extends boolean,
-> = Simplify<
-    MagicProperties<TransformValueDefinition<Values>, "Value"> &
-    MagicProperties<TransformType<Targets>, "Target"> &
-    MagicProperties<TransformType<Outlets>, "Outlet"> &
-    ClassProperties<Classes> &
-    (Portals extends true ? PortalProperties : {})
->;
+    Outlets extends OutletsDefinitionMap,
+    Portals extends true | undefined,
+> = {
+    values?: Values;
+    targets?: Targets;
+    classes?: Classes;
+    outlets?: Outlets;
+    portals?: Portals;
+};
 
-/**
- * Convert typed Object_ to ObjectConstructor before passing values to Stimulus
- */
-function patchValueTypeDefinitionMap(values: ValueDefinitionMap) {
-    const patchObject = (def: ValueTypeDefinition) => {
-        if ("type" in def) {
-            return {
-                type: def.type === Object_ ? Object : def.type,
-                default: def.default,
-            };
-        } else {
-            return def === Object_ ? Object : def;
+function patchValueTypeDefinitionMap(values: ValueDefinitionMap): ValueDefinitionMap {
+    const patchedValues: ValueDefinitionMap = {};
+    const pathType = (type: any) => {
+        if (type instanceof Wrapped && type.context === 'typed-object') {
+            return Object;
         }
+        if (type instanceof Wrapped && type.context === 'typed-array') {
+            return Array;
+        }
+        return type;
     };
-    return Object.entries(values).reduce((result, [key, def]) => {
-        result[key] = patchObject(def);
-        return result;
-    }, {} as ValueDefinitionMap);
+    Object.getOwnPropertyNames(values).forEach(key => {
+        const definition = values[key];
+        if (typeof definition === 'object' && 'default' in definition && 'type' in definition) {
+            patchedValues[key] = {
+                type: pathType(definition.type),
+                default: definition.default,
+            };
+        } else if (typeof definition === 'object' && 'type' in definition) {
+            patchedValues[key] = pathType(definition.type);
+        } else if (definition instanceof Wrapped) {
+            patchedValues[key] = pathType(definition);
+        } else {
+            patchedValues[key] = definition;
+        }
+    });
+    return patchedValues;
 }
 
 export function Typed<
     Values extends ValueDefinitionMap = {},
-    Targets extends TargetDefinitionMap = {},
-    Outlets extends OutletDefinitionMap = {},
+    Targets extends TargetsDefinitionMap = {},
     Classes extends readonly string[] = [],
-    Portals extends boolean = false,
-    Base extends Constructor<Controller> = Constructor<Controller>,
->(Base: Base, statics: Statics<Values, Targets, Outlets, Classes, Portals> = {}) {
-    const {values, targets, classes, outlets, portals} = statics;
+    Outlets extends OutletsDefinitionMap = {},
+    Portals extends true | undefined = undefined,
+    Base extends ControllerConstructor<ControllerElementType<Controller>> = ControllerConstructor<ControllerElementType<Controller>>,
+>(Base: Base, configuration: Configuration<Values, Targets, Classes, Outlets, Portals> = {}) {
+    const {values, targets, classes, outlets, portals} = configuration;
 
-    const patchedOutlets = Object.getOwnPropertyNames(outlets ?? {});
+    const patchedOutlet = Object.getOwnPropertyNames(outlets ?? {});
 
-    const patchedValues: ValueDefinitionMap = values ?? {};
+    const patchedValues = patchValueTypeDefinitionMap(values ?? {});
 
     if (portals === true) {
-        patchedOutlets.push('portal');
+        patchedOutlet.push('portal');
         if (typeof patchedValues['portalSelectors'] === 'undefined') {
-            patchedValues['portalSelectors'] = {
-                type: Array<string>,
-                default: [],
-            };
+            patchedValues['portalSelectors'] = {type: TypedArray<string>, default: []};
         }
     }
 
     let derived = class extends Base
     {
-        static values = patchValueTypeDefinitionMap(patchedValues);
+        static values = patchedValues;
         static targets = Object.getOwnPropertyNames(targets ?? {});
-        static outlets = patchedOutlets;
         static classes = classes ?? [];
+        static outlets = patchedOutlet;
     };
 
     if (portals === true) {
-        derived = PortalsAwareController(derived as Constructor<Controller>) as typeof derived;
+        derived = PortalsMixin(derived as Base) as typeof derived;
     }
 
     return derived as typeof Base & {
-        new(context: Context): InstanceType<Base> & StimulusProperties<Values, Targets, Outlets, Classes, Portals>;
-    };
+        new(context: Context): InstanceType<Base>
+            & ValuesProperties<Values>
+            & TargetsProperties<Targets>
+            & ClassProperties<Classes>
+            & OutletProperties<Outlets>
+            & PortalProperties<Portals>;
+    }
 }

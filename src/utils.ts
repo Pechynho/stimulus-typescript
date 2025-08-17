@@ -20,8 +20,8 @@ export const getController = <T extends Controller>(app: Application, element: H
 
 export const getControllerAsync = async <T extends Controller>(app: Application, element: HTMLElement, identifier: string, timeout: number = 5000, poll: number = 50): Promise<T | null> => {
     const startTime = Date.now();
+    const maxAttempts = 10;
     let attempts = 0;
-    let maxAttempts = 10;
     return new Promise((resolve, reject) => {
         const checkController = () => {
             attempts++;

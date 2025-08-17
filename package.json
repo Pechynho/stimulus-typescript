@@ -1,6 +1,6 @@
 {
   "name": "@pechynho/stimulus-typescript",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Set of TypeScript utilities for Stimulus controllers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
