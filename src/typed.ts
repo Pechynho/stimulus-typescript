@@ -67,7 +67,7 @@ type TypeFromConstructor<C> =
                         : C extends ObjectConstructor
                             ? Object
                             : C extends Constructor<infer T>
-                                ? TypeFromConstructor<T>
+                                ? T
                                 : never;
 
 type TransformValueDefinition<T extends ValueTypeDefinition> =
