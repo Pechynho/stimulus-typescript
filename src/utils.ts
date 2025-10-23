@@ -11,7 +11,7 @@ export const capitalize = (value: string): string => {
 };
 
 export const isActionEvent = (value: any): value is ActionEvent => {
-    return value instanceof Event && 'params' in value && typeof value.params !== 'object';
+    return value instanceof Event && 'params' in value && typeof value.params === 'object';
 }
 
 export const getController = <T extends Controller>(app: Application, element: HTMLElement, identifier: string): T | null => {
