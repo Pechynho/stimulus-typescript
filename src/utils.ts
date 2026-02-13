@@ -10,6 +10,67 @@ export const capitalize = (value: string): string => {
     return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
+export function addStimulusAction(
+    element: HTMLElement,
+    identifier: string,
+    method: string,
+    event?: string,
+    params?: Record<string, object | string | number | boolean>,
+): void {
+    const existing = element.dataset.action;
+    const actions = existing !== undefined && existing.trim() !== ''
+        ? existing.trim().split(/\s+/)
+        : [];
+    const target = `${identifier}#${method}`;
+    const descriptor = event !== undefined ? `${event}->${target}` : target;
+    if (!actions.includes(descriptor)) {
+        actions.push(descriptor);
+    }
+    element.dataset.action = actions.join(' ');
+    if (params !== undefined) {
+        for (const [key, value] of Object.entries(params)) {
+            const serialized = typeof value === 'object'
+                ? JSON.stringify(value)
+                : String(value);
+            element.dataset[`${camelCase(identifier)}${capitalize(camelCase(key))}Param`] = String(serialized);
+        }
+    }
+}
+
+export function removeStimulusAction(
+    element: HTMLElement,
+    identifier: string,
+    method: string,
+    event?: string,
+    removeParams: boolean = false,
+): void {
+    const existing = element.dataset.action;
+    if (existing === undefined || existing.trim() === '') {
+        return;
+    }
+
+    const target = `${identifier}#${method}`;
+    const descriptor = event !== undefined ? `${event}->${target}` : target;
+    const actions = existing.trim().split(/\s+/).filter((a) => a !== descriptor);
+
+    if (actions.length > 0) {
+        element.dataset.action = actions.join(' ');
+    } else {
+        delete element.dataset.action;
+    }
+
+    if (removeParams) {
+        const prefix = `${camelCase(identifier)}`;
+        const suffix = 'Param';
+
+        for (const key of Object.keys(element.dataset)) {
+            if (key.startsWith(prefix) && key.endsWith(suffix)) {
+                delete element.dataset[key];
+            }
+        }
+    }
+}
+
 export const isActionEvent = (value: any): value is ActionEvent => {
     return value instanceof Event && 'params' in value && typeof value.params === 'object';
 }
