@@ -29,10 +29,9 @@ export function addStimulusAction(
     element.dataset.action = actions.join(' ');
     if (params !== undefined) {
         for (const [key, value] of Object.entries(params)) {
-            const serialized = typeof value === 'object'
+            element.dataset[`${camelCase(identifier)}${capitalize(camelCase(key))}Param`] = typeof value === 'object'
                 ? JSON.stringify(value)
                 : String(value);
-            element.dataset[`${camelCase(identifier)}${capitalize(camelCase(key))}Param`] = String(serialized);
         }
     }
 }
@@ -42,29 +41,31 @@ export function removeStimulusAction(
     identifier: string,
     method: string,
     event?: string,
-    removeParams: boolean = false,
+    removeParams: boolean | string[] = false,
 ): void {
     const existing = element.dataset.action;
     if (existing === undefined || existing.trim() === '') {
         return;
     }
-
     const target = `${identifier}#${method}`;
     const descriptor = event !== undefined ? `${event}->${target}` : target;
     const actions = existing.trim().split(/\s+/).filter((a) => a !== descriptor);
-
     if (actions.length > 0) {
         element.dataset.action = actions.join(' ');
     } else {
         delete element.dataset.action;
     }
-
-    if (removeParams) {
-        const prefix = `${camelCase(identifier)}`;
-        const suffix = 'Param';
-
+    if (removeParams === false) {
+        return;
+    }
+    const prefix = camelCase(identifier);
+    if (Array.isArray(removeParams)) {
+        for (const name of removeParams) {
+            delete element.dataset[`${prefix}${capitalize(camelCase(name))}Param`];
+        }
+    } else {
         for (const key of Object.keys(element.dataset)) {
-            if (key.startsWith(prefix) && key.endsWith(suffix)) {
+            if (key.startsWith(prefix) && key.endsWith('Param')) {
                 delete element.dataset[key];
             }
         }
