@@ -72,6 +72,32 @@ export function removeStimulusAction(
     }
 }
 
+export function addStimulusOutlet(
+    element: HTMLElement,
+    identifier: string,
+    outlet: string,
+    selector: string,
+): void {
+    element.dataset[`${camelCase(identifier)}${capitalize(camelCase(outlet))}Outlet`] = selector;
+}
+
+export function removeStimulusOutlet(
+    element: HTMLElement,
+    identifier: string,
+    outlet?: string,
+): void {
+    if (outlet !== undefined) {
+        delete element.dataset[`${camelCase(identifier)}${capitalize(camelCase(outlet))}Outlet`];
+        return;
+    }
+    const prefix = camelCase(identifier);
+    for (const key of Object.keys(element.dataset)) {
+        if (key.startsWith(prefix) && key.endsWith('Outlet')) {
+            delete element.dataset[key];
+        }
+    }
+}
+
 export const isActionEvent = (value: any): value is ActionEvent => {
     return value instanceof Event && 'params' in value && typeof value.params === 'object';
 }
