@@ -10,13 +10,54 @@ export const capitalize = (value: string): string => {
     return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
-export function addStimulusAction(
-    element: HTMLElement,
-    identifier: string,
-    method: string,
-    event?: string,
-    params?: Record<string, object | string | number | boolean>,
-): void {
+export function addStimulusController(element: HTMLElement, identifier: string,): void {
+    const existing = element.dataset.controller;
+    const controllers = existing !== undefined && existing.trim() !== ''
+        ? existing.trim().split(/\s+/)
+        : [];
+    if (!controllers.includes(identifier)) {
+        controllers.push(identifier);
+    }
+    element.dataset.controller = controllers.join(' ');
+}
+
+export function removeStimulusController(element: HTMLElement, identifier?: string): void {
+    if (identifier === undefined) {
+        delete element.dataset.controller;
+        return;
+    }
+    const existing = element.dataset.controller;
+    if (existing === undefined || existing.trim() === '') {
+        return;
+    }
+    const controllers = existing.trim().split(/\s+/).filter((c) => c !== identifier);
+    if (controllers.length > 0) {
+        element.dataset.controller = controllers.join(' ');
+    } else {
+        delete element.dataset.controller;
+    }
+}
+
+export function addStimulusValue(element: HTMLElement, identifier: string, name: string, value: object | string | number | boolean): void {
+    element.dataset[`${camelCase(identifier)}${capitalize(camelCase(name))}Value`] = typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value);
+}
+
+export function removeStimulusValue(element: HTMLElement, identifier: string, name?: string): void {
+    if (name !== undefined) {
+        delete element.dataset[`${camelCase(identifier)}${capitalize(camelCase(name))}Value`];
+        return;
+    }
+    const prefix = camelCase(identifier);
+    for (const key of Object.keys(element.dataset)) {
+        if (key.startsWith(prefix) && key.endsWith('Value')) {
+            delete element.dataset[key];
+        }
+    }
+}
+
+export function addStimulusAction(element: HTMLElement, identifier: string, method: string, event?: string, params?: Record<string, object | string | number | boolean>): void {
     const existing = element.dataset.action;
     const actions = existing !== undefined && existing.trim() !== ''
         ? existing.trim().split(/\s+/)
@@ -36,13 +77,7 @@ export function addStimulusAction(
     }
 }
 
-export function removeStimulusAction(
-    element: HTMLElement,
-    identifier: string,
-    method: string,
-    event?: string,
-    removeParams: boolean | string[] = false,
-): void {
+export function removeStimulusAction(element: HTMLElement, identifier: string, method: string, event?: string, removeParams: boolean | string[] = false): void {
     const existing = element.dataset.action;
     if (existing === undefined || existing.trim() === '') {
         return;
@@ -72,20 +107,11 @@ export function removeStimulusAction(
     }
 }
 
-export function addStimulusOutlet(
-    element: HTMLElement,
-    identifier: string,
-    outlet: string,
-    selector: string,
-): void {
+export function addStimulusOutlet(element: HTMLElement, identifier: string, outlet: string, selector: string): void {
     element.dataset[`${camelCase(identifier)}${capitalize(camelCase(outlet))}Outlet`] = selector;
 }
 
-export function removeStimulusOutlet(
-    element: HTMLElement,
-    identifier: string,
-    outlet?: string,
-): void {
+export function removeStimulusOutlet(element: HTMLElement, identifier: string, outlet?: string): void {
     if (outlet !== undefined) {
         delete element.dataset[`${camelCase(identifier)}${capitalize(camelCase(outlet))}Outlet`];
         return;
